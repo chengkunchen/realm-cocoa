@@ -64,13 +64,19 @@
                             realm:(__unsafe_unretained RLMRealm *const)realm
                        parentInfo:(RLMClassInfo *)parentInfo
                          property:(__unsafe_unretained RLMProperty *const)property {
-    self = [self initWithObjectClassName:property.objectClassName];
+    if (property.type == RLMPropertyTypeObject)
+        self = [self initWithObjectClassName:property.objectClassName];
+    else
+        self = [self initWithObjectType:property.type optional:property.optional];
     if (self) {
         _realm = realm;
         REALM_ASSERT(list.get_realm() == realm->_realm);
         _backingList = std::move(list);
-        _objectInfo = &parentInfo->linkTargetType(property.index);
         _ownerInfo = parentInfo;
+        if (property.type == RLMPropertyTypeObject)
+            _objectInfo = &parentInfo->linkTargetType(property.index);
+        else
+            _objectInfo = _ownerInfo;
         _key = property.name;
     }
     return self;
@@ -80,8 +86,8 @@
                            property:(__unsafe_unretained RLMProperty *const)property {
     __unsafe_unretained RLMRealm *const realm = parentObject->_realm;
     auto col = parentObject->_info->tableColumn(property);
-    realm::List list(realm->_realm, parentObject->_row.get_linklist(col));
-    return [self initWithList:std::move(list)
+    auto& row = parentObject->_row;
+    return [self initWithList:realm::List(realm->_realm, *row.get_table(), col, row.get_index())
                         realm:realm
                    parentInfo:parentObject->_info
                      property:property];
@@ -325,10 +331,10 @@ static void RLMInsertObject(RLMManagedArray *ar, id object, NSUInteger index) {
 - (id)valueForKeyPath:(NSString *)keyPath {
     if ([keyPath hasPrefix:@"@"]) {
         // Delegate KVC collection operators to RLMResults
-        auto query = translateErrors([&] { return _backingList.get_query(); });
-        RLMResults *results = [RLMResults resultsWithObjectInfo:*_objectInfo
-                                                        results:realm::Results(_realm->_realm, std::move(query))];
-        return [results valueForKeyPath:keyPath];
+        return translateErrors([&] {
+            auto results = [RLMResults resultsWithObjectInfo:*_objectInfo results:_backingList.as_results()];
+            return [results valueForKeyPath:keyPath];
+        });
     }
     return [super valueForKeyPath:keyPath];
 }
@@ -344,11 +350,30 @@ static void RLMInsertObject(RLMManagedArray *ar, id object, NSUInteger index) {
         return @(!_backingList.is_valid());
     }
 
-    translateErrors([&] { _backingList.verify_attached(); });
-    return RLMCollectionValueForKey(self, key);
+    if ([key isEqualToString:@"self"]) {
+        NSMutableArray *array = [NSMutableArray arrayWithCapacity:_backingList.size()];
+        RLMAccessorContext context(_realm, *_objectInfo);
+        for (size_t i = 0, count = _backingList.size(); i < count; ++i) {
+            [array addObject:_backingList.get(context, i) ?: NSNull.null];
+        }
+        return array;
+    }
+
+    return translateErrors([&] {
+        _backingList.verify_attached();
+        return RLMCollectionValueForKey(_backingList, key, _realm, *_objectInfo);
+    });
 }
 
 - (void)setValue:(id)value forKey:(NSString *)key {
+    if ([key isEqualToString:@"self"]) {
+        RLMAccessorContext context(_realm, *_objectInfo);
+        for (size_t i = 0, count = _backingList.size(); i < count; ++i) {
+            _backingList.set(context, i, value);
+        }
+        return;
+    }
+
     translateErrors([&] { _backingList.verify_in_transaction(); });
     RLMCollectionSetValueForKey(self, key, value);
 }
@@ -356,12 +381,16 @@ static void RLMInsertObject(RLMManagedArray *ar, id object, NSUInteger index) {
 - (id)aggregate:(NSString *)property
          method:(realm::util::Optional<realm::Mixed> (realm::List::*)(size_t))method
      methodName:(NSString *)methodName {
-    size_t column = _objectInfo->tableColumn(property);
-    auto value = translateErrors([&] { return (_backingList.*method)(column); }, methodName);
-    if (!value) {
-        return nil;
+    size_t column = 0;
+    if (_backingList.get_type() == realm::PropertyType::Object) {
+        column = _objectInfo->tableColumn(property);
     }
-    return RLMMixedToObjc(*value);
+    else if (![property isEqualToString:@"self"]) {
+        @throw RLMException(@"Arrays of '%@' can only be aggregated on \"self\"", RLMTypeToString(_type));
+    }
+
+    auto value = translateErrors([&] { return (_backingList.*method)(column); }, methodName);
+    return value ? RLMMixedToObjc(*value) : nil;
 }
 
 - (id)minOfProperty:(NSString *)property {
@@ -402,8 +431,13 @@ static void RLMInsertObject(RLMManagedArray *ar, id object, NSUInteger index) {
 
 - (NSUInteger)indexOfObjectWithPredicate:(NSPredicate *)predicate {
     auto query = translateErrors([&] { return _backingList.get_query(); });
-    query.and_query(RLMPredicateToQuery(predicate, _objectInfo->rlmObjectSchema,
-                                        _realm.schema, _realm.group));
+    if (_objectInfo) {
+        query.and_query(RLMPredicateToQuery(predicate, _objectInfo->rlmObjectSchema,
+                                            _realm.schema, _realm.group));
+    }
+    else {
+        // FIXME
+    }
 
     auto indexInTable = query.find();
     if (indexInTable == realm::not_found) {

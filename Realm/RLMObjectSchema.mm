@@ -162,7 +162,8 @@ using namespace realm;
     }
 
     for (RLMProperty *prop in schema.properties) {
-        if (prop.optional && (prop.type == RLMPropertyTypeArray || prop.type == RLMPropertyTypeLinkingObjects)) {
+        if (prop.optional && prop.array && (prop.type == RLMPropertyTypeObject || prop.type == RLMPropertyTypeLinkingObjects)) {
+            // FIXME: message is awkward
             @throw RLMException(@"Property '%@.%@' cannot be made optional because optional '%@' properties are not supported.",
                                 className, prop.name, RLMTypeToString(prop.type));
         }
@@ -254,8 +255,14 @@ using namespace realm;
     }
 
     if (auto optionalProperties = [objectUtil getOptionalProperties:swiftObjectInstance]) {
+        // Types like String? are reported as properties to the obj-c runtime,
+        // but with no indication as to whether or not they're optional. We deal
+        // with this by marking them as required, and then using Swift
+        // reflection to re-check it.
         for (RLMProperty *property in propArray) {
-            property.optional = false;
+            if (!property.array) {
+                property.optional = false;
+            }
         }
         [optionalProperties enumerateKeysAndObjectsUsingBlock:^(NSString *propertyName, NSNumber *propertyType, BOOL *) {
             if ([ignoredProperties containsObject:propertyName]) {
@@ -298,7 +305,7 @@ using namespace realm;
     if (auto requiredProperties = [objectUtil requiredPropertiesForClass:objectClass]) {
         for (RLMProperty *property in propArray) {
             bool required = [requiredProperties containsObject:property.name];
-            if (required && property.type == RLMPropertyTypeObject) {
+            if (required && property.type == RLMPropertyTypeObject && !property.array) {
                 @throw RLMException(@"Object properties cannot be made required, "
                                     "but '+[%@ requiredProperties]' included '%@'", objectClass, property.name);
             }
@@ -307,7 +314,7 @@ using namespace realm;
     }
 
     for (RLMProperty *property in propArray) {
-        if (!property.optional && property.type == RLMPropertyTypeObject) {
+        if (!property.optional && property.type == RLMPropertyTypeObject && !property.array) {
             @throw RLMException(@"The `%@.%@` property must be marked as being optional.",
                                 [objectClass className], property.name);
         }

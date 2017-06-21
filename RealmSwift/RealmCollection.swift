@@ -22,8 +22,7 @@ import Realm
 /**
  An iterator for a `RealmCollection` instance.
  */
-public final class RLMIterator<T: Object>: IteratorProtocol {
-    private var i: UInt = 0
+public struct RLMIterator<T: RealmCollectionValue>: IteratorProtocol {
     private var generatorBase: NSFastEnumerationIterator
 
     init(collection: RLMCollection) {
@@ -123,6 +122,70 @@ private func forceCast<A, U>(_ from: A, to type: U.Type) -> U {
     return from as! U
 }
 
+/// A type which can be stored in a Realm List or Results
+public protocol RealmCollectionValue {
+    static func _rlmArray() -> RLMArray<AnyObject>
+}
+
+extension RealmCollectionValue {
+    public static func _rlmArray() -> RLMArray<AnyObject> {
+        return RLMArray(objectType: .int, optional: false)
+    }
+}
+
+extension Optional: RealmCollectionValue {
+    public static func _rlmArray() -> RLMArray<AnyObject> {
+        switch Wrapped.self {
+        case is Int.Type, is Int8.Type, is Int16.Type, is Int32.Type, is Int64.Type:
+            return RLMArray(objectType: .int, optional: true)
+        case is Bool.Type:  return RLMArray(objectType: .bool,  optional: true)
+        case is Float.Type:  return RLMArray(objectType: .float,  optional: true)
+        case is Double.Type: return RLMArray(objectType: .double, optional: true)
+        case is String.Type: return RLMArray(objectType: .string, optional: true)
+        case is Data.Type:   return RLMArray(objectType: .data,   optional: true)
+        case is Date.Type:   return RLMArray(objectType: .date,   optional: true)
+        default: fatalError("Unsupported type for List: \(Wrapped.self)?")
+        }
+    }
+}
+
+extension Int: RealmCollectionValue {}
+extension Int8: RealmCollectionValue {}
+extension Int16: RealmCollectionValue {}
+extension Int32: RealmCollectionValue {}
+extension Int64: RealmCollectionValue {}
+extension Float: RealmCollectionValue {
+    public static func _rlmArray() -> RLMArray<AnyObject> {
+        return RLMArray(objectType: .float, optional: false)
+    }
+}
+extension Double: RealmCollectionValue {
+    public static func _rlmArray() -> RLMArray<AnyObject> {
+        return RLMArray(objectType: .double, optional: false)
+    }
+}
+extension Bool: RealmCollectionValue {
+    public static func _rlmArray() -> RLMArray<AnyObject> {
+        return RLMArray(objectType: .bool, optional: false)
+    }
+}
+
+extension String: RealmCollectionValue {
+    public static func _rlmArray() -> RLMArray<AnyObject> {
+        return RLMArray(objectType: .string, optional: false)
+    }
+}
+extension Date: RealmCollectionValue {
+    public static func _rlmArray() -> RLMArray<AnyObject> {
+        return RLMArray(objectType: .date, optional: false)
+    }
+}
+extension Data: RealmCollectionValue {
+    public static func _rlmArray() -> RLMArray<AnyObject> {
+        return RLMArray(objectType: .data, optional: false)
+    }
+}
+
 #if swift(>=3.2)
 /// :nodoc:
 public protocol RealmCollectionBase: RandomAccessCollection, LazyCollectionProtocol, CustomStringConvertible, ThreadConfined where Element: Object {
@@ -131,7 +194,7 @@ public protocol RealmCollectionBase: RandomAccessCollection, LazyCollectionProto
 /// :nodoc:
 public protocol RealmCollectionBase: RandomAccessCollection, LazyCollectionProtocol, CustomStringConvertible, ThreadConfined {
     /// The type of the objects contained in the collection.
-    associatedtype Element: Object
+    associatedtype Element: RealmCollectionValue
 }
 #endif
 
@@ -378,7 +441,31 @@ public protocol RealmCollection: RealmCollectionBase {
     func _addNotificationBlock(_ block: @escaping (RealmCollectionChange<AnyRealmCollection<Element>>) -> Void) -> NotificationToken
 }
 
-private class _AnyRealmCollectionBase<T: Object>: AssistedObjectiveCBridgeable {
+public extension RealmCollection where Element: MinMaxType {
+    public func min() -> Element? {
+        return min(ofProperty: "self")
+    }
+    public func max() -> Element? {
+        return max(ofProperty: "self")
+    }
+}
+
+public extension RealmCollection where Element: AddableType {
+    public func sum() -> Element {
+        return sum(ofProperty: "self")
+    }
+    public func average() -> Element? {
+        return average(ofProperty: "self")
+    }
+}
+
+public extension RealmCollection where Element: Comparable {
+    public func sorted(ascending: Bool = true) -> Results<Element> {
+        return sorted(byKeyPath: "self", ascending: ascending)
+    }
+}
+
+private class _AnyRealmCollectionBase<T: RealmCollectionValue>: AssistedObjectiveCBridgeable {
     typealias Wrapper = AnyRealmCollection<Element>
     typealias Element = T
     var realm: Realm? { fatalError() }
@@ -534,7 +621,7 @@ private final class _AnyRealmCollection<C: RealmCollection>: _AnyRealmCollection
 
  Instances of `RealmCollection` forward operations to an opaque underlying collection having the same `Element` type.
  */
-public final class AnyRealmCollection<T: Object>: RealmCollection {
+public final class AnyRealmCollection<T: RealmCollectionValue>: RealmCollection {
 
     public func index(after i: Int) -> Int { return i + 1 }
     public func index(before i: Int) -> Int { return i - 1 }
@@ -836,7 +923,7 @@ public final class AnyRealmCollection<T: Object>: RealmCollection {
 
 // MARK: AssistedObjectiveCBridgeable
 
-private struct AnyRealmCollectionBridgingMetadata<T: Object> {
+private struct AnyRealmCollectionBridgingMetadata<T: RealmCollectionValue> {
     var baseMetadata: Any?
     var baseType: _AnyRealmCollectionBase<T>.Type
 }

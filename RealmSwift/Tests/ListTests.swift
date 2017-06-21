@@ -85,6 +85,24 @@ class ListTests: TestCase {
     }
 #endif
 
+    func testPrimitive() {
+        let obj = SwiftListObject()
+        obj.int.append(5)
+        XCTAssertEqual(obj.int.first!, 5)
+        XCTAssertEqual(obj.int.last!, 5)
+        XCTAssertEqual(obj.int[0], 5)
+        obj.int.append(objectsIn: [6, 7, 8] as [Int])
+        XCTAssertEqual(obj.int.index(of: 6), 1)
+        XCTAssertEqual(2, obj.int.index(matching: NSPredicate(format: "self == 7")))
+        XCTAssertNil(obj.int.index(matching: NSPredicate(format: "self == 9")))
+        XCTAssertEqual(obj.int.max(), 8)
+        XCTAssertEqual(obj.int.sum(), 26)
+
+        obj.string.append("str")
+        XCTAssertEqual(obj.string.first!, "str")
+        XCTAssertEqual(obj.string[0], "str")
+    }
+
     func testInvalidated() {
         guard let array = array else {
             fatalError("Test precondition failure")
@@ -174,12 +192,12 @@ class ListTests: TestCase {
 
         array.append(objectsIn: [str1, str2, str1])
 
-        array.remove(objectAtIndex: 1)
+        array.remove(at: 1)
         XCTAssertEqual(str1, array[0])
         XCTAssertEqual(str1, array[1])
 
-        assertThrows(array.remove(objectAtIndex: 200))
-        assertThrows(array.remove(objectAtIndex: -200))
+        assertThrows(array.remove(at: 2))
+        assertThrows(array.remove(at: -2))
     }
 
     func testRemoveLast() {
@@ -299,20 +317,20 @@ class ListTests: TestCase {
 
         array.append(objectsIn: [str1, str2])
 
-        array.swap(index1: 0, 1)
+        array.swap(0, 1)
         XCTAssertEqual(Int(2), array.count)
         XCTAssertEqual(str2, array[0])
         XCTAssertEqual(str1, array[1])
 
-        array.swap(index1: 1, 1)
+        array.swap(1, 1)
         XCTAssertEqual(Int(2), array.count)
         XCTAssertEqual(str2, array[0])
         XCTAssertEqual(str1, array[1])
 
-        assertThrows(array.swap(index1: -1, 0))
-        assertThrows(array.swap(index1: 0, -1))
-        assertThrows(array.swap(index1: 1000, 0))
-        assertThrows(array.swap(index1: 0, 1000))
+        assertThrows(array.swap(-1, 0))
+        assertThrows(array.swap(0, -1))
+        assertThrows(array.swap(1000, 0))
+        assertThrows(array.swap(0, 1000))
     }
 
     func testChangesArePersisted() {
