@@ -19,6 +19,10 @@ x.x.x Release notes (yyyy-MM-dd)
   Server 1.6.0 or later.
 * Improve performance of creating Swift objects which contain at least one List
   property.
+* Add `-[RLMSyncUser retrieveUserInfoForProvider:providerIdentity:completion:]`
+  API allowing administrator users to retrieve information about a user based
+  on their provider identity (for example, a username). Requires any edition
+  of the Realm Object Server 1.8.2 or later.
 
 ### Bugfixes
 

@@ -18,12 +18,11 @@
 
 #import "RLMSyncSessionRefreshHandle.hpp"
 
-#import "RLMAuthResponseModel.h"
+#import "RLMJSONModels.h"
 #import "RLMNetworkClient.h"
 #import "RLMSyncManager_Private.h"
 #import "RLMSyncUser_Private.hpp"
 #import "RLMSyncUtil_Private.hpp"
-#import "RLMTokenModels.h"
 #import "RLMUtil.hpp"
 
 #import "sync/sync_session.hpp"
@@ -255,7 +254,7 @@ void unregisterRefreshHandle(const std::weak_ptr<SyncUser>& user, const std::str
     RLMSyncCompletionBlock handler = ^(NSError *error, NSDictionary *json) {
         [weakSelf _onRefreshCompletionWithError:error json:json];
     };
-    [RLMNetworkClient postRequestToEndpoint:RLMServerEndpointAuth
+    [RLMNetworkClient sendRequestToEndpoint:[RLMSyncAuthEndpoint endpoint]
                                      server:self.authServerURL
                                        JSON:json
                                  completion:handler];
