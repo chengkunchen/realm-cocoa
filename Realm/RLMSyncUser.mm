@@ -247,10 +247,6 @@ PermissionChangeCallback RLMWrapPermissionStatusCallback(RLMPermissionStatusBloc
     return [RLMRealm realmWithConfiguration:[RLMRealmConfiguration managementConfigurationForUser:self] error:error];
 }
 
-- (RLMRealm *)permissionRealmWithError:(NSError **)error {
-    return [RLMRealm realmWithConfiguration:[RLMRealmConfiguration permissionConfigurationForUser:self] error:error];
-}
-
 - (NSURL *)authenticationServer {
     if (!_user) {
         return nil;
