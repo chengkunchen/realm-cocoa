@@ -212,11 +212,13 @@ static void changeArray(__unsafe_unretained RLMManagedArray *const ar, NSKeyValu
     return _objectInfo;
 }
 
+
+- (bool)isBackedByList:(realm::List const&)list {
+    return _backingList == list;
+}
+
 - (BOOL)isEqual:(id)object {
-    if (RLMManagedArray *linkView = RLMDynamicCast<RLMManagedArray>(object)) {
-        return linkView->_backingList == _backingList;
-    }
-    return NO;
+    return [object respondsToSelector:@selector(isBackedByList:)] && [object isBackedByList:_backingList];
 }
 
 - (NSUInteger)hash {

@@ -255,6 +255,10 @@
     XCTAssertEqualObjects([array.array[1] stringCol], @"b", @"Second element should have property value 'b'");
 
     [realm beginWriteTransaction];
+
+    array.array = array.array;
+    XCTAssertEqual(array.array.count, 3U);
+
     [array.array replaceObjectAtIndex:0 withObject:obj3];
     XCTAssertTrue([[array.array objectAtIndex:0] isEqualToObject:obj3], @"Objects should be replaced");
     array.array[0] = obj1;
@@ -300,6 +304,10 @@
     XCTAssertEqualObjects(obj.intObj[0], @1);
     XCTAssertThrows([obj.intObj addObject:@""]);
 
+    obj.intObj = obj.intObj;
+    XCTAssertEqual(obj.intObj.count, 1U);
+    XCTAssertEqualObjects(obj.intObj.firstObject, @1);
+
     RLMRealm *realm = [RLMRealm defaultRealm];
     [realm beginWriteTransaction];
     obj = [AllPrimitiveArrays createInRealm:realm withValue:@[@[],@[],@[],@[],@[],@[],@[]]];
@@ -313,6 +321,10 @@
     XCTAssertTrue([obj.dateObj isKindOfClass:[RLMArray class]]);
 
     [obj.intObj addObject:@5];
+    XCTAssertEqualObjects(obj.intObj.firstObject, @5);
+
+    obj.intObj = obj.intObj;
+    XCTAssertEqual(obj.intObj.count, 1U);
     XCTAssertEqualObjects(obj.intObj.firstObject, @5);
 }
 
